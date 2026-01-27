@@ -1,6 +1,6 @@
-# 🎉 Project Reorganized - Backend & Web Separation
+#  Project Reorganized - Backend & Web Separation
 
-## ✅ New Structure
+##  New Structure
 
 ```
 Gas Station Monitoring Website/
@@ -44,7 +44,7 @@ npm run dev
 # Runs on http://localhost:5173
 ```
 
-## 📝 What's Where
+##  What's Where
 
 ### Backend (`backend/`)
 - Django REST Framework API
@@ -60,7 +60,7 @@ npm run dev
 - Tailwind CSS
 - Charts and dashboards
 
-## 🔌 API
+##  API
 
 **Backend**: `http://localhost:8000/api/`
 **Frontend**: `http://localhost:5173`
@@ -71,7 +71,7 @@ npm run dev
 - `POST /api/cars/{id}/mark_paid/` - Mark paid
 - `POST /api/detected-vehicles/{id}/enhance_plate/` - Enhance plate
 
-## 📚 Documentation
+##  Documentation
 
 - **Backend**: `backend/README.md`
 - **Frontend**: `web/README.md`
@@ -86,7 +86,7 @@ npm run dev
 ✅ Backend in Docker, frontend on any host
 ✅ Easy to scale
 
-## 🐳 Docker
+##  Docker
 
 ```bash
 cd backend
@@ -94,7 +94,7 @@ docker-compose up -d
 # Runs backend on port 8000
 ```
 
-## 📦 Dependencies
+##  Dependencies
 
 ### Backend
 - Django 4.2.8
@@ -107,7 +107,7 @@ docker-compose up -d
 - TypeScript
 - Node.js 18+
 
-## 🎯 Next Steps
+##  Next Steps
 
 1. **Backend Development**
    ```bash
@@ -130,4 +130,4 @@ docker-compose up -d
 
 ---
 
-**Status**: ✅ Project properly organized with separate backend and web folders!
+**Status**:  Project properly organized with separate backend and web folders!
