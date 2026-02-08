@@ -42,7 +42,7 @@ services:
       - OPENBLAS_NUM_THREADS=4
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1
-      - DJANGO_SETTINGS_MODULE=config.settings
+      - DJANGO_SETTINGS_MODULE=GasStationProject.settings
       - DATABASE_URL=postgresql://admin:admin123@postgres:5432/gas_station
       - DEBUG=False
       - SECRET_KEY=your-secret-key-change-in-production
