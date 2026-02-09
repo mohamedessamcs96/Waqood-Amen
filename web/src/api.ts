@@ -1,25 +1,25 @@
 const API_URL = "http://127.0.0.1:8000";
 
 export async function register(username: string, password: string, role: string = "employee") {
-  const form = new FormData();
-  form.append("username", username);
-  form.append("password", password);
-  form.append("role", role);
-  const res = await fetch(`${API_URL}/register`, {
+  const res = await fetch(`${API_URL}/api/auth/register/`, {
     method: "POST",
-    body: form,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username,
+      password,
+      password_confirm: password,
+      role,
+    }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 export async function login(username: string, password: string) {
-  const form = new FormData();
-  form.append("username", username);
-  form.append("password", password);
-  const res = await fetch(`${API_URL}/login`, {
+  const res = await fetch(`${API_URL}/api/auth/login/`, {
     method: "POST",
-    body: form,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();

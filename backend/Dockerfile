@@ -4,7 +4,7 @@ WORKDIR /app
 
 # System dependencies (optimized for CPU, PaddleOCR, and Django)
 RUN apt-get update && apt-get install -y \
-    ffmpeg libsm6 libxext6 libxrender-dev libgomp1 git curl \
+    ffmpeg libsm6 libxext6 libxrender-dev libgomp1 git curl libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip first
@@ -28,10 +28,10 @@ ENV PYTHONUNBUFFERED=1
 ENV DJANGO_SETTINGS_MODULE=GasStationProject.settings
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Collect static files
-RUN python manage.py collectstatic --noinput || true
-
 EXPOSE 8000
 
-# Run Django with Gunicorn for production-ready setup
-CMD ["gunicorn", "GasStationProject.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--worker-class", "sync", "--timeout", "120"]
+# Entrypoint: run migrations, then start Gunicorn
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+CMD ["/app/entrypoint.sh"]

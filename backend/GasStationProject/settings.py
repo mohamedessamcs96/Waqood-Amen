@@ -25,7 +25,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken',
     'corsheaders',
+    'apps.authentication',
     'apps.cars',
     'apps.vehicles',
 ]
@@ -61,25 +63,40 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'GasStationProject.wsgi.application'
 
-# Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+# Database — use PostgreSQL in Docker, SQLite for local dev
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
 
-# For PostgreSQL (production):
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': 'gas_station',
-#         'USER': 'admin',
-#         'PASSWORD': 'admin123',
-#         'HOST': 'localhost',
-#         'PORT': '5432',
-#     }
-# }
+if DATABASE_URL:
+    # Docker / Production: PostgreSQL
+    # DATABASE_URL format: postgresql://user:password@host:port/dbname
+    import re
+    db_match = re.match(r'postgresql://(?P<user>[^:]+):(?P<password>[^@]+)@(?P<host>[^:]+):(?P<port>\d+)/(?P<name>.+)', DATABASE_URL)
+    if db_match:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.postgresql',
+                'NAME': db_match.group('name'),
+                'USER': db_match.group('user'),
+                'PASSWORD': db_match.group('password'),
+                'HOST': db_match.group('host'),
+                'PORT': db_match.group('port'),
+            }
+        }
+    else:
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': BASE_DIR / 'db.sqlite3',
+            }
+        }
+else:
+    # Local development: SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -119,9 +136,18 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',
+    ],
 }
 
 # CORS configuration
+CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins for development
+CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://localhost:5173',
