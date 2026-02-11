@@ -38,6 +38,9 @@ python manage.py collectstatic --noinput || true
 echo "=== Starting Gunicorn... ==="
 exec gunicorn GasStationProject.wsgi:application \
     --bind 0.0.0.0:8000 \
-    --workers 4 \
+    --workers 2 \
     --worker-class sync \
-    --timeout 120
+    --timeout 120 \
+    --graceful-timeout 30 \
+    --max-requests 1000 \
+    --max-requests-jitter 50

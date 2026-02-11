@@ -16,11 +16,12 @@ export function AdminDashboard({ language }: { language: 'ar' | 'en' }) {
 
   const fetchDashboardData = async () => {
     try {
-      const [cars, vehicles] = await Promise.all([
+      const [cars, vehiclesResponse] = await Promise.all([
         getCarsWithAnalysis(),
-        fetch(`${API_URL}/detected-vehicles`).then(r => r.json())
+        fetch(`${API_URL}/api/detected-vehicles/`).then(r => r.json()).catch(() => ({ results: [] }))
       ]);
       setCarsData(cars);
+      const vehicles = Array.isArray(vehiclesResponse) ? vehiclesResponse : (vehiclesResponse.results || []);
       setVehiclesData(vehicles);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);

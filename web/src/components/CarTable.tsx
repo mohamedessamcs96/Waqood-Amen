@@ -109,7 +109,9 @@ export function CarTable({ cars, language, onPaymentToggle, onPlateUpdated }: Ca
                 <tr 
                   key={car.id} 
                   className={`hover:bg-slate-50 transition-colors text-sm ${
-                    car.paid ? 'bg-green-50/30' : 'bg-red-50/30'
+                    car.paid 
+                      ? 'bg-green-50/30' 
+                      : 'bg-red-100 border-l-4 border-red-500'
                   }`}
                 >
                   {/* Car Image */}

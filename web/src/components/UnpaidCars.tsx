@@ -19,10 +19,13 @@ export function UnpaidCars({ language }: { language: 'ar' | 'en' }) {
 
   const fetchCars = async () => {
     try {
-      const [carsData, vehiclesData] = await Promise.all([
+      const [carsData, vehiclesResponse] = await Promise.all([
         getCarsWithAnalysis(),
-        fetch(`${API_URL}/detected-vehicles`).then(r => r.json())
+        fetch(`${API_URL}/api/detected-vehicles/`).then(r => r.json()).catch(() => ({ results: [] }))
       ]);
+
+      // Handle paginated response
+      const vehiclesData = Array.isArray(vehiclesResponse) ? vehiclesResponse : (vehiclesResponse.results || []);
 
       const carMap: { [key: number]: any } = {};
       carsData.forEach((car: any) => {
