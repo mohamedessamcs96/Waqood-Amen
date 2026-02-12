@@ -1,11 +1,12 @@
 """
 Django management command to analyze videos and detect vehicles, plates, faces.
-Runs YOLO + OCR analysis inside Docker where all dependencies are available.
+Runs YOLO + PaddleOCR (primary) + EasyOCR (fallback) inside Docker.
 
 Usage: python manage.py analyze_video <car_id>
        python manage.py analyze_video --all
 """
 import os
+import re
 import json
 import cv2
 import numpy as np
@@ -29,11 +30,26 @@ class Command(BaseCommand):
         self.yolo_license = YOLO('/app/best.pt')
         self.stdout.write(self.style.SUCCESS('✅ Models loaded'))
 
-        self.ocr_reader = None
+        # Primary OCR: PaddleOCR (better Arabic accuracy for KSA plates)
+        self.paddle_ocr = None
+        try:
+            from paddleocr import PaddleOCR
+            self.paddle_ocr = PaddleOCR(
+                use_angle_cls=True,
+                lang='ar',
+                show_log=False,
+                use_gpu=False,
+            )
+            self.stdout.write(self.style.SUCCESS('✅ PaddleOCR loaded (primary OCR)'))
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'⚠️ PaddleOCR not available: {e}'))
+
+        # Fallback OCR: EasyOCR
+        self.easyocr_reader = None
         try:
             import easyocr
-            self.ocr_reader = easyocr.Reader(['en', 'ar'], gpu=False)
-            self.stdout.write(self.style.SUCCESS('✅ EasyOCR loaded'))
+            self.easyocr_reader = easyocr.Reader(['en', 'ar'], gpu=False)
+            self.stdout.write(self.style.SUCCESS('✅ EasyOCR loaded (fallback OCR)'))
         except Exception as e:
             self.stdout.write(self.style.WARNING(f'⚠️ EasyOCR not available: {e}'))
 
@@ -268,34 +284,147 @@ class Command(BaseCommand):
         return 'Unknown'
 
     def ocr_plate(self, plate_image):
-        if self.ocr_reader is None or plate_image is None:
+        """
+        Read plate text using PaddleOCR (primary) + EasyOCR (fallback).
+        Picks the highest-confidence result. Cleans output for KSA plate format.
+        """
+        if plate_image is None:
             return None
         try:
-            import re
-            # Preprocess plate image for better OCR
-            preprocessed = self.preprocess_plate(plate_image)
-            results = self.ocr_reader.readtext(preprocessed)
-            if results:
-                results.sort(key=lambda x: x[2], reverse=True)
-                texts = [r[1] for r in results if r[2] > 0.1]
-                raw_text = ' '.join(texts) if texts else None
-                if raw_text:
-                    # Keep only Arabic letters, Arabic numbers, and English numbers
-                    cleaned = re.sub(r'[^\u0600-\u06FF\u0660-\u0669\u06F0-\u06F90-9\s]', '', raw_text)
-                    cleaned = ' '.join(cleaned.split())
-                    return cleaned if cleaned else None
+            color_img, binary_img = self.preprocess_plate(plate_image)
+            results = []
+
+            # --- Method 1: PaddleOCR on color image (best for Arabic) ---
+            if self.paddle_ocr:
+                try:
+                    paddle_res = self.paddle_ocr.ocr(color_img, cls=True)
+                    if paddle_res and paddle_res[0]:
+                        for line in paddle_res[0]:
+                            text, conf = line[1][0], line[1][1]
+                            cleaned = self.clean_ksa_plate(text)
+                            if cleaned:
+                                results.append((cleaned, conf, 'paddle_color'))
+                except Exception as e:
+                    self.stdout.write(f'  [OCR] PaddleOCR color error: {e}')
+
+            # --- Method 2: PaddleOCR on binary image ---
+            if self.paddle_ocr:
+                try:
+                    binary_3ch = cv2.cvtColor(binary_img, cv2.COLOR_GRAY2BGR)
+                    paddle_res = self.paddle_ocr.ocr(binary_3ch, cls=True)
+                    if paddle_res and paddle_res[0]:
+                        for line in paddle_res[0]:
+                            text, conf = line[1][0], line[1][1]
+                            cleaned = self.clean_ksa_plate(text)
+                            if cleaned:
+                                results.append((cleaned, conf, 'paddle_binary'))
+                except Exception as e:
+                    self.stdout.write(f'  [OCR] PaddleOCR binary error: {e}')
+
+            # --- Method 3: EasyOCR on color image (fallback) ---
+            if self.easyocr_reader:
+                try:
+                    easy_res = self.easyocr_reader.readtext(color_img)
+                    for (bbox, text, conf) in easy_res:
+                        cleaned = self.clean_ksa_plate(text)
+                        if cleaned:
+                            results.append((cleaned, conf, 'easy_color'))
+                except Exception as e:
+                    self.stdout.write(f'  [OCR] EasyOCR color error: {e}')
+
+            # --- Method 4: EasyOCR on binary image (last resort) ---
+            if self.easyocr_reader:
+                try:
+                    easy_res = self.easyocr_reader.readtext(binary_img)
+                    for (bbox, text, conf) in easy_res:
+                        cleaned = self.clean_ksa_plate(text)
+                        if cleaned:
+                            results.append((cleaned, conf, 'easy_binary'))
+                except Exception as e:
+                    self.stdout.write(f'  [OCR] EasyOCR binary error: {e}')
+
+            if not results:
+                return None
+
+            # Pick highest confidence
+            best = max(results, key=lambda x: x[1])
+            self.stdout.write(f'  [OCR] All: {[(r[0], f"{r[1]:.2f}", r[2]) for r in results]}')
+            self.stdout.write(f'  [OCR] Best: "{best[0]}" (conf={best[1]:.2f}, method={best[2]})')
+            return best[0]
+
         except Exception as e:
             self.stdout.write(f'  [OCR] Error: {e}')
         return None
 
-    def preprocess_plate(self, plate_image):
-        """Preprocess plate image: grayscale, CLAHE, denoise, threshold."""
-        if len(plate_image.shape) == 3:
-            gray = cv2.cvtColor(plate_image, cv2.COLOR_BGR2GRAY)
+    def clean_ksa_plate(self, raw_text):
+        """
+        Clean OCR text for KSA (Saudi Arabia) license plate format.
+        KSA plates: 3 Arabic letters + 4 digits  (e.g. أ ب ج 1234)
+        Converts Arabic-Indic digits (٠-٩) to Western digits (0-9).
+        """
+        if not raw_text:
+            return None
+
+        # Remove all special characters, keep Arabic letters + digits + spaces
+        text = re.sub(r'[^\u0600-\u06FF\u0660-\u0669\u06F0-\u06F90-9\s]', '', raw_text)
+
+        # Extract Arabic letters
+        arabic_letters = re.findall(r'[\u0600-\u06FF]', text)
+
+        # Extract digits (Arabic-Indic ٠-٩ and Western 0-9)
+        arabic_indic = re.findall(r'[\u0660-\u0669\u06F0-\u06F9]', text)
+        western_digits = re.findall(r'[0-9]', text)
+
+        # Convert Arabic-Indic digits → Western
+        indic_to_western = {
+            '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+            '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9',
+            '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+            '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+        }
+        converted = [indic_to_western.get(d, d) for d in arabic_indic]
+        all_digits = western_digits + converted
+
+        # Format: up to 3 Arabic letters + up to 4 digits
+        letters_part = ' '.join(arabic_letters[:3]) if arabic_letters else ''
+        digits_part = ''.join(all_digits[:4]) if all_digits else ''
+
+        if letters_part and digits_part:
+            return f'{letters_part} {digits_part}'
+        elif digits_part:
+            return digits_part
+        elif letters_part:
+            return letters_part
         else:
-            gray = plate_image.copy()
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+            cleaned = ' '.join(text.split())
+            return cleaned if cleaned else None
+
+    def preprocess_plate(self, plate_image):
+        """
+        Enhanced preprocessing for KSA plates.
+        Returns (color_resized, binary_image) for dual-OCR strategy.
+        """
+        # Resize to standard width for consistent OCR
+        h, w = plate_image.shape[:2]
+        target_w = 400
+        scale = target_w / max(w, 1)
+        color_resized = cv2.resize(plate_image, (target_w, int(h * scale)), interpolation=cv2.INTER_CUBIC)
+
+        # Grayscale
+        gray = cv2.cvtColor(color_resized, cv2.COLOR_BGR2GRAY)
+
+        # CLAHE for contrast enhancement
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(gray)
-        denoised = cv2.fastNlMeansDenoising(enhanced, None, h=10, templateWindowSize=7, searchWindowSize=21)
-        thresh = cv2.adaptiveThreshold(denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-        return cv2.GaussianBlur(thresh, (3, 3), 0)
+
+        # Denoise
+        denoised = cv2.fastNlMeansDenoising(enhanced, None, h=12, templateWindowSize=7, searchWindowSize=21)
+
+        # Otsu's thresholding (better than adaptive for uniform plate backgrounds)
+        _, binary = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        # Morphological close to fill small gaps in characters
+        kernel = np.ones((2, 2), np.uint8)
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+
+        return color_resized, binary

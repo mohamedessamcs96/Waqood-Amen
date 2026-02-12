@@ -2,7 +2,7 @@
 
 ## Smart Gas Station Monitoring & Protection System
 
-An AI-powered gas station monitoring system that uses **YOLOv8** computer vision and **EasyOCR** to automatically detect vehicles, read license plates (Arabic & English), identify car colors, and capture driver regions from uploaded surveillance videos. The system tracks payment status and alerts staff when a vehicle with **unpaid history** returns.
+An AI-powered gas station monitoring system that uses **YOLOv8** computer vision and **PaddleOCR** (with EasyOCR fallback) to automatically detect vehicles, read KSA license plates (Arabic & English), identify car colors, and capture driver regions from uploaded surveillance videos. The system tracks payment status and alerts staff when a vehicle with **unpaid history** returns.
 
 ---
 
@@ -27,8 +27,8 @@ An AI-powered gas station monitoring system that uses **YOLOv8** computer vision
 |---|---|
 | 🎥 **Video Upload** | Upload surveillance video (MP4, AVI, MOV, MKV, WebM — up to 500MB) |
 | 🚗 **Vehicle Detection** | YOLOv8 detects cars, trucks, and buses per frame |
-| 🔢 **License Plate OCR** | YOLOv8 plate model + EasyOCR reads Arabic & English plates |
-| 🖼️ **Image Preprocessing** | CLAHE, denoising, adaptive thresholding for better OCR accuracy |
+| 🔢 **License Plate OCR** | YOLOv8 plate model + **PaddleOCR** (primary) + EasyOCR (fallback) for KSA Arabic plates |
+| 🖼️ **Image Preprocessing** | CLAHE, denoising, Otsu thresholding, morphological cleanup for better OCR accuracy |
 | 🎨 **Car Color Detection** | HSV-based dominant color identification (White, Black, Silver, Red, Blue, etc.) |
 | 👤 **Driver Region Capture** | Extracts and enhances the driver-side region of each vehicle |
 | 💰 **Payment Tracking** | Mark vehicles as Paid / Unpaid from the dashboard |
@@ -47,7 +47,7 @@ An AI-powered gas station monitoring system that uses **YOLOv8** computer vision
 | **Frontend** | React 18, TypeScript, Vite, Tailwind CSS, Recharts, Lucide Icons |
 | **Backend** | Django 4.2.8, Django REST Framework 3.14.0, Gunicorn |
 | **Database** | PostgreSQL 15 (Docker) |
-| **AI / CV** | YOLOv8 (Ultralytics), EasyOCR (Arabic + English), OpenCV |
+| **AI / CV** | YOLOv8 (Ultralytics), PaddleOCR (primary), EasyOCR (fallback), OpenCV |
 | **Containers** | Docker, Docker Compose |
 
 ---
@@ -256,8 +256,9 @@ Video Upload → Save File → Create Car Record → Background Subprocess
                                                        ↓
                                             ┌─────────────────────┐
                                             │  3. OCR Plate Read  │
-                                            │  EasyOCR (ar + en)  │
-                                            │  + Preprocessing    │
+                                            │  PaddleOCR (primary)│
+                                            │  EasyOCR (fallback) │
+                                            │  + KSA Format Clean │
                                             └─────────────────────┘
                                                        ↓
                                             ┌─────────────────────┐
@@ -295,22 +296,46 @@ Video Upload → Save File → Create Car Record → Background Subprocess
 - Runs on each vehicle crop (confidence ≥ 0.25)
 - Adds **10% padding** around detected plate for better OCR
 
-#### 4. Plate OCR (EasyOCR + Preprocessing)
-The plate image goes through a preprocessing pipeline before OCR:
+#### 4. Plate OCR (PaddleOCR + EasyOCR Dual Strategy)
+
+We use **PaddleOCR** as the primary OCR engine because it has significantly better Arabic text recognition accuracy (~93-95%) compared to EasyOCR (~75-80%). EasyOCR serves as a fallback.
+
+**Why PaddleOCR over EasyOCR for KSA plates?**
+
+| Feature | EasyOCR | PaddleOCR |
+|---|---|---|
+| **Arabic Accuracy** | ~75-80% | ~93-95% |
+| **Speed per plate** | ~2 seconds | ~0.5 seconds |
+| **KSA plate handling** | Generic | Better Arabic character separation |
+| **License** | Apache 2.0 | Apache 2.0 |
+
+**Dual-OCR Strategy:** Each plate image is processed 4 ways, and the highest-confidence result wins:
+
+1. **PaddleOCR on color image** — best for clear plates
+2. **PaddleOCR on binary image** — best for low-contrast plates
+3. **EasyOCR on color image** — fallback
+4. **EasyOCR on binary image** — last resort
+
+**Preprocessing pipeline** (applied before OCR):
 
 | Step | Method | Purpose |
 |---|---|---|
+| Resize | Scale to 400px width | Consistent input size |
 | Grayscale | `cv2.cvtColor` | Remove color noise |
-| CLAHE | `clipLimit=2.0, tileGrid=(4,4)` | Enhance contrast |
-| Denoising | `fastNlMeansDenoising(h=10)` | Remove noise |
-| Adaptive Threshold | `ADAPTIVE_THRESH_GAUSSIAN_C` | Binarize text |
-| Gaussian Blur | `kernel=(3,3)` | Smooth edges |
+| CLAHE | `clipLimit=3.0, tileGrid=(8,8)` | Enhance contrast |
+| Denoising | `fastNlMeansDenoising(h=12)` | Remove noise |
+| Otsu Threshold | `THRESH_BINARY + THRESH_OTSU` | Binarize text (better than adaptive for plates) |
+| Morphological Close | `kernel=(2,2)` | Fill small gaps in characters |
 
-After OCR, the text is **cleaned** to keep only:
-- Arabic letters (ا-ي)
-- Arabic numbers (٠-٩)
-- English numbers (0-9)
-- All special characters (`$ | _ ?` etc.) are removed
+**KSA Plate Format Cleanup:**
+
+Saudi plates follow the format: **3 Arabic letters + 4 digits** (e.g. `أ ب ج 1234`)
+
+After OCR, the text is cleaned:
+- Remove all special characters (`$ | _ ?` etc.)
+- Extract Arabic letters (keep up to 3)
+- Extract digits (Arabic-Indic ٠-٩ are converted to Western 0-9)
+- Format output: `أ ب ج 1234`
 
 #### 5. Car Color Detection
 - Extracts the **center region** (30-70% height, 20-80% width) of the car crop

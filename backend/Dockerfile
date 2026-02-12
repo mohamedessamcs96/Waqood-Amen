@@ -2,9 +2,10 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# System dependencies (optimized for CPU, PaddleOCR, and Django)
-RUN apt-get update && apt-get install -y \
+# System dependencies (optimized for CPU, PaddleOCR, EasyOCR, and Django)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsm6 libxext6 libxrender-dev libgomp1 git curl libpq-dev \
+    libglib2.0-0 gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip first
