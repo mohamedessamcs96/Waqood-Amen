@@ -36,8 +36,13 @@ export function AllCars({ language }: { language: 'ar' | 'en' }) {
 
       vehicleToCarMap.current = {};
 
-      // First, add all detected vehicles
-      const transformedCars: Car[] = vehiclesData.map((vehicle: any) => {
+      // Only include vehicles that have a detected plate text
+      const vehiclesWithPlates = vehiclesData.filter((vehicle: any) => {
+        const plateText = vehicle.plate_text?.trim();
+        return plateText && plateText !== '' && plateText !== 'N/A' && !plateText.startsWith('UNKNOWN');
+      });
+
+      const transformedCars: Car[] = vehiclesWithPlates.map((vehicle: any) => {
         const car = carMap[vehicle.video_id];
         const vehicleId = String(vehicle.id);
         vehicleToCarMap.current[vehicleId] = vehicle.video_id;
@@ -61,44 +66,22 @@ export function AllCars({ language }: { language: 'ar' | 'en' }) {
           driverEn: 'Driver',
           driverImage: vehicle.driver_face_image ? `${API_URL}/face_crops/${vehicle.driver_face_image}` : '',
           paid: isPaid,
-          timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: vehicle.created_at 
+            ? new Date(vehicle.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
           plateText: vehicle.plate_text || car?.plate,
           carColor: vehicle.car_color,
           vehicleConfidence: vehicle.vehicle_confidence,
-          plateImage: vehicle.plate_image ? `${API_URL}/plate_crops/${vehicle.plate_image}` : ''
+          plateImage: vehicle.plate_image ? `${API_URL}/plate_crops/${vehicle.plate_image}` : '',
+          _createdAt: vehicle.created_at || ''
         };
       });
 
-      // Then, add cars without detected vehicles
-      const carsWithoutVehicles = carsData.filter((car: any) => car.vehicle_count === 0);
-      carsWithoutVehicles.forEach((car: any) => {
-        const carId = `car-${car.id}`;
-        vehicleToCarMap.current[carId] = car.id;
-        
-        const isPaid = localPaymentStatus.current[carId] !== undefined 
-          ? localPaymentStatus.current[carId] 
-          : Boolean(car.paid);
-        
-        transformedCars.push({
-          id: carId,
-          vehicleId: carId,
-          brand: car.plate || 'Unknown',
-          brandAr: car.plate || 'غير معروف',
-          color: 'Not analyzed',
-          colorEn: 'Not analyzed',
-          license: car.plate || 'N/A',
-          licenseEn: car.plate || 'N/A',
-          image: '',
-          driver: 'Not analyzed',
-          driverEn: 'Not analyzed',
-          driverImage: '',
-          paid: isPaid,
-          timestamp: new Date(car.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-          plateText: car.plate,
-          carColor: 'N/A',
-          vehicleConfidence: 0,
-          plateImage: ''
-        });
+      // Sort by date (newest first)
+      transformedCars.sort((a: any, b: any) => {
+        const dateA = a._createdAt ? new Date(a._createdAt).getTime() : 0;
+        const dateB = b._createdAt ? new Date(b._createdAt).getTime() : 0;
+        return dateB - dateA;
       });
 
       setAllVehicles(transformedCars);

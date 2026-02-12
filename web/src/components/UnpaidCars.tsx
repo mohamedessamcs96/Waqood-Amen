@@ -34,7 +34,13 @@ export function UnpaidCars({ language }: { language: 'ar' | 'en' }) {
 
       vehicleToCarMap.current = {};
 
-      const transformedCars: Car[] = vehiclesData.map((vehicle: any) => {
+      // Only include vehicles that have a detected plate text
+      const vehiclesWithPlates = vehiclesData.filter((vehicle: any) => {
+        const plateText = vehicle.plate_text?.trim();
+        return plateText && plateText !== '' && plateText !== 'N/A' && !plateText.startsWith('UNKNOWN');
+      });
+
+      const transformedCars: Car[] = vehiclesWithPlates.map((vehicle: any) => {
         const car = carMap[vehicle.video_id];
         const vehicleId = String(vehicle.id);
         vehicleToCarMap.current[vehicleId] = vehicle.video_id;
@@ -58,16 +64,24 @@ export function UnpaidCars({ language }: { language: 'ar' | 'en' }) {
           driverEn: 'Driver',
           driverImage: vehicle.driver_face_image ? `${API_URL}/face_crops/${vehicle.driver_face_image}` : '',
           paid: isPaid,
-          timestamp: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          timestamp: vehicle.created_at 
+            ? new Date(vehicle.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            : new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
           plateText: vehicle.plate_text || car?.plate,
           carColor: vehicle.car_color,
           vehicleConfidence: vehicle.vehicle_confidence,
-          plateImage: vehicle.plate_image ? `${API_URL}/plate_crops/${vehicle.plate_image}` : ''
+          plateImage: vehicle.plate_image ? `${API_URL}/plate_crops/${vehicle.plate_image}` : '',
+          _createdAt: vehicle.created_at || ''
         };
       });
 
-      // Filter only unpaid vehicles
+      // Filter only unpaid vehicles, then sort by date (newest first)
       const unpaidOnly = transformedCars.filter(car => !car.paid);
+      unpaidOnly.sort((a: any, b: any) => {
+        const dateA = a._createdAt ? new Date(a._createdAt).getTime() : 0;
+        const dateB = b._createdAt ? new Date(b._createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
       setUnpaidVehicles(unpaidOnly);
     } catch (error) {
       console.error('Error fetching cars:', error);
