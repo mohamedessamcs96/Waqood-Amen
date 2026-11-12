@@ -10,8 +10,8 @@ from .image_enhancement import (
 )
 
 __all__ = [
-    'PlateImageEnhancer',
-    'enhance_plate_image_basic',
-    'enhance_plate_image_advanced',
-    'enhance_from_file',
+    "PlateImageEnhancer",
+    "enhance_plate_image_basic",
+    "enhance_plate_image_advanced",
+    "enhance_from_file",
 ]

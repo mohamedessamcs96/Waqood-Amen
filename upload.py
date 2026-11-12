@@ -8,6 +8,7 @@ Usage:
     python upload.py --video my_video.mp4     # Upload specific video
     python upload.py --plate "ABC-123"        # Upload with specific plate number
 """
+
 import requests
 import time
 import sys
@@ -35,7 +36,9 @@ def upload_video(video_path: str, plate: str = ""):
     with open(video_path, "rb") as f:
         files = {"video": (os.path.basename(video_path), f, "video/mp4")}
         data = {"plate": plate}
-        response = requests.post(f"{API_URL}/api/cars/upload_video/", files=files, data=data, timeout=120)
+        response = requests.post(
+            f"{API_URL}/api/cars/upload_video/", files=files, data=data, timeout=120
+        )
 
     if response.status_code != 201:
         print(f" Upload failed: {response.text}")
@@ -57,7 +60,9 @@ def upload_video(video_path: str, plate: str = ""):
     for i in range(120):  # Wait up to 10 minutes
         time.sleep(5)
         try:
-            status_resp = requests.get(f"{API_URL}/api/cars/analysis_status/?car_id={car_id}", timeout=10)
+            status_resp = requests.get(
+                f"{API_URL}/api/cars/analysis_status/?car_id={car_id}", timeout=10
+            )
             if status_resp.status_code == 200:
                 status_data = status_resp.json()
                 if status_data.get("analyzed"):
@@ -76,7 +81,9 @@ def upload_video(video_path: str, plate: str = ""):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Upload video to Gas Station Monitoring API")
+    parser = argparse.ArgumentParser(
+        description="Upload video to Gas Station Monitoring API"
+    )
     parser.add_argument("--video", default="cars.MP4", help="Path to video file")
     parser.add_argument("--plate", default="", help="License plate number (optional)")
     args = parser.parse_args()

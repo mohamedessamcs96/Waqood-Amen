@@ -105,9 +105,9 @@ curl -X POST "http://localhost:8000/api/detected-vehicles/1/enhance_plate/?metho
 from utils.image_enhancement import PlateImageEnhancer
 import cv2
 
-image = cv2.imread('plate.jpg')
+image = cv2.imread("plate.jpg")
 enhanced = PlateImageEnhancer.enhance_basic(image)
-cv2.imwrite('plate_enhanced.jpg', enhanced)
+cv2.imwrite("plate_enhanced.jpg", enhanced)
 ```
 
 ## Docker
@@ -147,13 +147,13 @@ Default: SQLite (db.sqlite3)
 For PostgreSQL, update `GasStationProject/settings.py`:
 ```python
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'gas_station',
-        'USER': 'admin',
-        'PASSWORD': 'admin123',
-        'HOST': 'localhost',
-        'PORT': '5432',
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "gas_station",
+        "USER": "admin",
+        "PASSWORD": "admin123",
+        "HOST": "localhost",
+        "PORT": "5432",
     }
 }
 ```

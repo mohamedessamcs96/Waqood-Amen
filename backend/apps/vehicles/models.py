@@ -1,13 +1,13 @@
 """
 Vehicles app models for detected vehicles and analysis.
 """
+
 from django.db import models
-from apps.cars.models import Car
 
 
 class DetectedVehicle(models.Model):
     """Model to store detected vehicles from video analysis."""
-    
+
     video_id = models.IntegerField(db_index=True)  # References Car.id
     vehicle_index = models.IntegerField(default=0)
     crop_image = models.CharField(max_length=255, null=True, blank=True)
@@ -22,12 +22,12 @@ class DetectedVehicle(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'detected_vehicles'
-        ordering = ['-created_at']
+        db_table = "detected_vehicles"
+        ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=['video_id']),
-            models.Index(fields=['plate_text']),
-            models.Index(fields=['-created_at']),
+            models.Index(fields=["video_id"]),
+            models.Index(fields=["plate_text"]),
+            models.Index(fields=["-created_at"]),
         ]
 
     def __str__(self):
